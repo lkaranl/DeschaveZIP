@@ -10,6 +10,9 @@ import subprocess
 import shutil
 from pathlib import Path
 import sys
+import concurrent.futures
+import threading
+import queue
 
 class ZipCracker:
     def __init__(self, zip_path, wordlist_path):
@@ -23,6 +26,9 @@ class ZipCracker:
         self._7z_binary = self._find_7z_binary()
         self.found_password = None
         self.encryption_type = None
+        self.max_workers = min(8, os.cpu_count() or 4)  # Limitar ao número de CPUs, máximo 8
+        self._found_password_lock = threading.Lock()
+        self._progress_queue = queue.Queue()
     
     def _find_7z_binary(self):
         """Encontra o caminho para o binário 7z no sistema"""
@@ -266,39 +272,26 @@ class ZipCracker:
         self.found_password = None
         
         try:
-            # Verificar se o arquivo ZIP existe
+            # Verificações iniciais
             if not os.path.exists(self.zip_path):
-                yield {
-                    "current_password": 0,
-                    "current_text": "",
-                    "error": f"Arquivo ZIP não encontrado: {self.zip_path}"
-                }
+                yield {"current_password": 0, "current_text": "", "error": f"Arquivo ZIP não encontrado: {self.zip_path}"}
                 return
                 
-            # Verificar se a wordlist existe
             if not os.path.exists(self.wordlist_path):
-                yield {
-                    "current_password": 0,
-                    "current_text": "",
-                    "error": f"Wordlist não encontrada: {self.wordlist_path}"
-                }
+                yield {"current_password": 0, "current_text": "", "error": f"Wordlist não encontrada: {self.wordlist_path}"}
                 return
             
             # Detectar o tipo de criptografia
             encryption_info = self.detect_encryption_type()
             if not encryption_info["is_encrypted"]:
-                yield {
-                    "current_password": 0, 
-                    "current_text": "",
-                    "error": "O arquivo ZIP não está protegido por senha."
-                }
+                yield {"current_password": 0, "current_text": "", "error": "O arquivo ZIP não está protegido por senha."}
                 return
             
             # Verificar se é AES e se temos suporte externo
             is_aes = encryption_info["encryption_type"].startswith("AES")
             has_7z = bool(self._7z_binary)
             
-            # Avisar sobre criptografia
+            # Avisar sobre a criptografia
             if is_aes:
                 if has_7z:
                     yield {
@@ -315,33 +308,17 @@ class ZipCracker:
                         "encryption_info": encryption_info
                     }
             
-            # Se for AES e não temos 7z, tentar usar o método padrão com zipfile (pode falhar)
-            # Tentar abrir o arquivo ZIP
+            # Verificar se há arquivos no ZIP
             try:
                 zip_file = zipfile.ZipFile(self.zip_path)
-            except zipfile.BadZipFile:
-                yield {
-                    "current_password": 0,
-                    "current_text": "",
-                    "error": "Arquivo ZIP inválido ou corrompido."
-                }
-                return
+                files_to_check = [info for info in zip_file.infolist() if info.file_size > 0]
+                if not files_to_check:
+                    yield {"current_password": 0, "current_text": "", "error": "O arquivo ZIP não contém arquivos para extrair."}
+                    zip_file.close()
+                    return
+                zip_file.close()
             except Exception as e:
-                yield {
-                    "current_password": 0,
-                    "current_text": "",
-                    "error": f"Erro ao abrir arquivo ZIP: {str(e)}"
-                }
-                return
-            
-            # Verificar se há arquivos no ZIP
-            files_to_check = [info for info in zip_file.infolist() if info.file_size > 0]
-            if not files_to_check:
-                yield {
-                    "current_password": 0,
-                    "current_text": "",
-                    "error": "O arquivo ZIP não contém arquivos para extrair."
-                }
+                yield {"current_password": 0, "current_text": "", "error": f"Erro ao abrir arquivo ZIP: {str(e)}"}
                 return
             
             # Carregar senhas da wordlist
@@ -350,103 +327,149 @@ class ZipCracker:
                 passwords = [line.strip() for line in wordlist if line.strip()]
             
             if not passwords:
-                yield {
-                    "current_password": 0,
-                    "current_text": "",
-                    "error": "A wordlist está vazia ou não contém senhas válidas."
-                }
+                yield {"current_password": 0, "current_text": "", "error": "A wordlist está vazia ou não contém senhas válidas."}
                 return
-                
+            
+            # Limpar variáveis de controle
+            self.total_passwords = len(passwords)
+            self.current_password = 0
+            self.found_password = None
+            self._progress_queue = queue.Queue()
+            
             yield {
                 "current_password": 0,
                 "current_text": "",
-                "info": f"Testando {len(passwords)} senhas da wordlist..."
+                "info": f"Testando {len(passwords)} senhas da wordlist com {self.max_workers} threads..."
             }
             
-            # Testar cada senha
-            for idx, password in enumerate(passwords):
-                # Verificar pausas e cancelamentos
-                if pause_check and pause_check():
-                    while pause_check():
-                        time.sleep(0.1)
-                        if cancel_check and cancel_check():
-                            return
-                
-                if cancel_check and cancel_check():
-                    return
-                
-                self.current_password = idx + 1
-                
-                yield {
-                    "current_password": self.current_password,
-                    "current_text": password
-                }
-                
-                # Se for AES e temos 7z disponível, usar o 7z para testar a senha
-                if is_aes and has_7z:
-                    success, error_msg = self.crack_password_with_7z_detailed(password)
-                    if success:
-                        self.found_password = password
-                        yield {
-                            "current_password": self.current_password,
-                            "current_text": password,
-                            "password": password,
-                            "method": "7z"
-                        }
-                        return
-                    continue
-                
-                # Diferentes formatos de senha e codificações
-                password_formats = [
-                    # String original
-                    password,
-                    # Com diferentes codificações
-                    password.encode('utf-8'),
-                    password.encode('latin1'),
-                    password.encode('ascii', errors='ignore'),
-                    password.encode('cp1252', errors='ignore'),
-                    # Variações comuns
-                    password.lower(),
-                    password.upper(),
-                    # Remover espaços
-                    password.strip(),
-                ]
-                
-                # Testar todas as variações da senha
-                for pwd_format in password_formats:
-                    # Tenta ler cada arquivo no ZIP
-                    for zip_info in files_to_check:
-                        try:
-                            # Método 1: Tentar ler o arquivo
+            # Função auxiliar para testar uma senha individual
+            def test_password(password_info):
+                idx, password = password_info
+                try:
+                    # Se já encontrou uma senha, não prosseguir
+                    if self.found_password is not None:
+                        return None
+                        
+                    # Se foi solicitado pausa ou cancelamento, não prosseguir
+                    if pause_check and pause_check():
+                        return None
+                    if cancel_check and cancel_check():
+                        return None
+                    
+                    # Reportar progresso
+                    self._progress_queue.put({
+                        "current_password": idx + 1,
+                        "current_text": password
+                    })
+                    
+                    result = None
+                    
+                    # Se for AES e temos 7z, testar com 7z
+                    if is_aes and has_7z:
+                        success, _ = self.crack_password_with_7z_detailed(password)
+                        if success:
+                            with self._found_password_lock:
+                                if self.found_password is None:  # Verificar novamente sob o lock
+                                    self.found_password = password
+                                    result = {
+                                        "current_password": idx + 1,
+                                        "current_text": password,
+                                        "password": password,
+                                        "method": "7z"
+                                    }
+                        return result
+                    
+                    # Método padrão com zipfile
+                    zip_file = zipfile.ZipFile(self.zip_path)
+                    files_to_check = [info for info in zip_file.infolist() if info.file_size > 0]
+                    
+                    # Diferentes formatos de senha e codificações
+                    password_formats = [
+                        password,
+                        password.encode('utf-8'),
+                        password.encode('latin1'),
+                        password.encode('ascii', errors='ignore'),
+                        password.encode('cp1252', errors='ignore'),
+                        password.lower(),
+                        password.upper(),
+                        password.strip(),
+                    ]
+                    
+                    # Testar todas as variações da senha
+                    for pwd_format in password_formats:
+                        if self.found_password is not None:
+                            break
+                        
+                        for zip_info in files_to_check:
                             try:
                                 zip_file.read(zip_info.filename, pwd=pwd_format if isinstance(pwd_format, bytes) else pwd_format.encode('utf-8', errors='ignore'))
-                                # Senha correta encontrada!
-                                self.found_password = password
-                                yield {
-                                    "current_password": self.current_password,
-                                    "current_text": password,
-                                    "password": password,
-                                    "method": "zipfile"
-                                }
-                                return
-                            except RuntimeError as e:
-                                # Senha incorreta ou outro erro
-                                if not "password required" in str(e) and not "Bad password" in str(e):
-                                    # Erro diferente de senha incorreta
-                                    continue
-                            except zipfile.BadZipFile:
-                                # Arquivo corrompido ou formato não suportado
-                                continue
+                                with self._found_password_lock:
+                                    if self.found_password is None:
+                                        self.found_password = password
+                                        result = {
+                                            "current_password": idx + 1,
+                                            "current_text": password,
+                                            "password": password,
+                                            "method": "zipfile"
+                                        }
+                                break
                             except Exception:
-                                # Outro erro, tentar próximo formato
                                 continue
-                        except Exception:
-                            # Erro ao tentar ler, continuar para próximo arquivo
-                            continue
+                    
+                    zip_file.close()
+                    return result
+                except Exception as e:
+                    return None
             
-            # Se chegar aqui, nenhuma senha funcionou
+            # Processar senhas em paralelo
+            with concurrent.futures.ThreadPoolExecutor(max_workers=self.max_workers) as executor:
+                # Enviar todas as senhas para processamento
+                future_to_password = {
+                    executor.submit(test_password, (idx, password)): (idx, password) 
+                    for idx, password in enumerate(passwords)
+                }
+                
+                # Monitorar progresso e resultados
+                found_result = None
+                
+                while future_to_password and not found_result:
+                    # Verificar se foi solicitado cancelamento
+                    if cancel_check and cancel_check():
+                        executor.shutdown(wait=False)
+                        break
+                        
+                    # Processar atualizações de progresso
+                    try:
+                        while not self._progress_queue.empty():
+                            progress_info = self._progress_queue.get_nowait()
+                            self.current_password = max(self.current_password, progress_info["current_password"])
+                            yield progress_info
+                    except queue.Empty:
+                        pass
+                    
+                    # Verificar senhas concluídas
+                    done_futures = [f for f in future_to_password.keys() if f.done()]
+                    for future in done_futures:
+                        result = future.result()
+                        if result and "password" in result:
+                            found_result = result
+                            # Cancelar as demais threads
+                            executor.shutdown(wait=False)
+                            break
+                        # Remover o future processado
+                        del future_to_password[future]
+                    
+                    # Pequena pausa para não sobrecarregar a CPU
+                    time.sleep(0.01)
+            
+            # Se encontrou senha, retornar o resultado
+            if found_result:
+                yield found_result
+                return
+            
+            # Se chegou aqui, nenhuma senha funcionou
             yield {
-                "current_password": self.current_password,
+                "current_password": self.total_passwords,
                 "current_text": "",
                 "error": "Nenhuma senha encontrada na wordlist."
             }
@@ -457,6 +480,5 @@ class ZipCracker:
                 "current_text": "",
                 "error": f"Erro ao processar arquivo: {str(e)}"
             }
-        finally:
-            if 'zip_file' in locals():
-                zip_file.close() 
+            import traceback
+            traceback.print_exc() 
