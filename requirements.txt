@@ -1,0 +1,6 @@
+PyGObject>=3.40.0
+
+# Dependências do sistema que devem ser instaladas via gerenciador de pacotes (apt, dnf, etc):
+# - GTK 4.0 (gir1.2-gtk-4.0)
+# - Zenity (zenity)
+# - Libadwaita (gir1.2-adw-1) [opcional] 
