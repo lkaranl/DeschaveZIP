@@ -181,69 +181,72 @@ class ZipCracker:
         }
         return compression_types.get(compress_type, "Desconhecido")
     
-    def crack_password_with_7z(self, password, zip_path=None):
-        """Tenta quebrar a senha com o 7-Zip"""
+    def crack_password_with_7z(self, password):
+        """Wrapper da versão detalhada para compatibilidade"""
+        success, _ = self.crack_password_with_7z_detailed(password)
+        return success
+        
+    def crack_password_with_7z_detailed(self, password, zip_path=None):
+        """Tenta quebrar a senha com o 7-Zip e retorna detalhes"""
         if self._7z_binary is None:
             return False, "7-Zip não encontrado no sistema"
             
         if zip_path is None:
             zip_path = self.zip_path
             
-        # Calcular timeout adaptativo baseado no tamanho do arquivo
-        file_size_kb = os.path.getsize(zip_path) / 1024
-        base_timeout = 5  # segundos
-        
-        # Ajustar timeout com base no tamanho
-        if file_size_kb > 10000:  # > 10MB
-            adaptive_timeout = base_timeout * 3  # 15 segundos
-        elif file_size_kb > 1000:  # > 1MB
-            adaptive_timeout = base_timeout * 2  # 10 segundos
-        else:
-            adaptive_timeout = base_timeout  # 5 segundos
-            
-        # Garantir que o timeout nunca seja menor que o mínimo seguro
-        timeout = max(adaptive_timeout, 5)
-            
+        # Criar diretório temporário para teste de extração
+        temp_dir = tempfile.mkdtemp()
         try:
-            # Usando p7zip para testar a senha
-            cmd = [self._7z_binary, "t", "-p" + password, zip_path]
-            process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            # Teste 1: Primeiro verificar se realmente é a senha correta tentando listar o conteúdo
+            test_cmd = [self._7z_binary, "t", "-p" + password, zip_path]
+            test_process = subprocess.run(test_cmd, 
+                                     stdout=subprocess.PIPE, 
+                                     stderr=subprocess.PIPE, 
+                                     text=True,
+                                     timeout=10)
             
-            try:
-                stdout, stderr = process.communicate(timeout=timeout)
-                
-                # Verificar resultado
-                success_markers = [
-                    "Everything is Ok",
-                    "Tudo está Ok"  # Versão em português
-                ]
-                
-                error_markers = [
-                    "Wrong password",
-                    "ERROR: Wrong password",
-                    "Data Error",
-                    "ERRORS:",
-                    "Senha incorreta",  # Versão em português
-                    "ERRO: Senha incorreta"  # Versão em português
-                ]
-                
-                for marker in success_markers:
-                    if marker in stdout:
+            # Verificar se o teste foi bem-sucedido
+            test_output = test_process.stdout
+            test_success = test_process.returncode == 0 and "Everything is Ok" in test_output
+            
+            if not test_success:
+                # Verificar mensagens de erro específicas que indicam senha incorreta
+                if "Wrong password" in test_output or "Can not open encrypted archive" in test_output:
+                    return False, "Senha incorreta"
+                # Se não for uma mensagem clara de erro de senha, realizar um segundo teste
+            
+            # Teste 2: Tentar extrair pelo menos um arquivo para confirmar a senha
+            extract_cmd = [self._7z_binary, "e", "-y", "-p" + password, "-o" + temp_dir, zip_path]
+            extract_process = subprocess.run(extract_cmd, 
+                                    stdout=subprocess.PIPE, 
+                                    stderr=subprocess.PIPE, 
+                                    text=True,
+                                    timeout=15)
+            
+            extract_output = extract_process.stdout
+            
+            # Verificar se algum arquivo foi extraído com sucesso
+            extracted_files = os.listdir(temp_dir)
+            if extract_process.returncode == 0 and extracted_files and len(extracted_files) > 0:
+                # Verificar se há pelo menos um arquivo não-vazio extraído
+                for extract_file in extracted_files:
+                    file_path = os.path.join(temp_dir, extract_file)
+                    if os.path.isfile(file_path) and os.path.getsize(file_path) > 0:
                         return True, None
-                        
-                for marker in error_markers:
-                    if marker in stdout or marker in stderr:
-                        return False, f"Senha incorreta: {password}"
-                
-                # Se não encontrou nenhum dos marcadores conhecidos
-                return False, f"Resultado não reconhecido do 7z ao testar senha: {password}"
-                
-            except subprocess.TimeoutExpired:
-                process.kill()
-                return False, f"Timeout ao testar senha com 7-Zip: {password}"
-                
+            
+            # Se chegou aqui, não conseguiu extrair nenhum arquivo
+            return False, "Não foi possível extrair arquivos com essa senha"
+            
+        except subprocess.TimeoutExpired:
+            return False, "Timeout ao verificar senha"
         except Exception as e:
-            return False, f"Erro ao usar 7-Zip: {str(e)}"
+            return False, f"Erro ao verificar senha: {str(e)}"
+        finally:
+            # Limpar diretório temporário
+            try:
+                shutil.rmtree(temp_dir, ignore_errors=True)
+            except:
+                pass
     
     def crack_password(self, pause_check=None, cancel_check=None):
         """
@@ -381,7 +384,8 @@ class ZipCracker:
                 
                 # Se for AES e temos 7z disponível, usar o 7z para testar a senha
                 if is_aes and has_7z:
-                    if self.crack_password_with_7z(password):
+                    success, error_msg = self.crack_password_with_7z_detailed(password)
+                    if success:
                         self.found_password = password
                         yield {
                             "current_password": self.current_password,

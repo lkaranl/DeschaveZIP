@@ -16,6 +16,7 @@ import threading
 import time
 import subprocess
 from pathlib import Path
+import traceback
 
 from deschavezip.zip_cracker import ZipCracker
 
@@ -214,18 +215,32 @@ class AppWindow(Gtk.ApplicationWindow):
         thread.start()
     
     def check_zip_file(self):
-        """Verifica e exibe informações sobre o arquivo ZIP"""
+        """
+        Verifica o arquivo ZIP selecionado e atualiza o log com informações sobre
+        o arquivo, incluindo tipo de criptografia, tamanho e número de arquivos.
+        """
+        selected_file = self.zip_path
+        if not selected_file:
+            self.log("Selecione um arquivo ZIP primeiro")
+            return
+            
+        if not os.path.exists(selected_file):
+            self.log(f"Arquivo não encontrado: {selected_file}")
+            return
+            
+        file_size_mb = os.path.getsize(selected_file) / (1024 * 1024)
+        
         try:
             import zipfile
             from deschavezip.zip_cracker import ZipCracker
             
             # Usar o detector avançado de criptografia
-            temp_cracker = ZipCracker(self.zip_path, "")
+            temp_cracker = ZipCracker(selected_file, "")
             encryption_info = temp_cracker.detect_encryption_type()
             
             self.log(f"Informações do arquivo ZIP:")
-            self.log(f"- Nome: {os.path.basename(self.zip_path)}")
-            self.log(f"- Tamanho: {os.path.getsize(self.zip_path) / 1024:.2f} KB")
+            self.log(f"- Nome: {os.path.basename(selected_file)}")
+            self.log(f"- Tamanho: {os.path.getsize(selected_file) / 1024:.2f} KB")
             self.log(f"- Total de arquivos: {encryption_info['total_files']}")
             
             if encryption_info["is_encrypted"]:
@@ -233,7 +248,7 @@ class AppWindow(Gtk.ApplicationWindow):
                 
                 is_aes = encryption_info["encryption_type"].startswith("AES")
                 if is_aes:
-                    self.log(f"- 🔒 Tipo de criptografia: \033[1;33m{encryption_info['encryption_type']}\033[0m")
+                    self.log(f"- 🔒 Tipo de criptografia: {encryption_info['encryption_type']}")
                     
                     if encryption_info.get("has_external_support"):
                         self.log(f"  ✅ 7-Zip encontrado! Será utilizado para quebra de senha AES.")
@@ -296,11 +311,25 @@ class AppWindow(Gtk.ApplicationWindow):
                 method_text = "usando método interno"
                 method_icon = "🔧"
                 
-            self.log(f"🔓 SENHA ENCONTRADA: \033[1;32m{password}\033[0m {method_icon} ({method_text})")
+            self.log("\n" + "=" * 50)
+            self.log("🎉 SENHA ENCONTRADA! 🎉")
+            self.log("=" * 50)
+            self.log(f"🔑 Senha: {password}")
+            self.log(f"🔐 Método: {method_icon} {method_text}")
+            self.log("=" * 50 + "\n")
+            
             self.is_running = False
             self.update_ui_state()
         elif error:
-            self.log(f"❌ ERRO: {error}")
+            if "Nenhuma senha encontrada" in error:
+                self.log("\n" + "=" * 50)
+                self.log("❌ SENHA NÃO ENCONTRADA ❌")
+                self.log("=" * 50)
+                self.log(f"📋 {error}")
+                self.log(f"💡 Tente usar uma wordlist diferente ou maior")
+                self.log("=" * 50 + "\n")
+            else:
+                self.log(f"❌ ERRO: {error}")
             self.is_running = False
             self.update_ui_state()
         elif warning:
@@ -317,8 +346,8 @@ class AppWindow(Gtk.ApplicationWindow):
         elif info:
             self.log(f"ℹ️ {info}")
         elif current_text:
-            if self.current_password % 100 == 0:  # Mostrar apenas a cada 100 senhas para reduzir log
-                self.log(f"Testando senha #{current}: {current_text} ({current}/{self.total_passwords})")
+            if current % 10 == 0 or current <= 5 or current > self.total_passwords - 5:  # Mostrar mais no início e fim
+                self.log(f"🔍 Testando: {current_text} ({current}/{self.total_passwords})")
         
         return False
     
@@ -340,4 +369,18 @@ class AppWindow(Gtk.ApplicationWindow):
         self.cancel_button.set_sensitive(self.is_running)
         
         self.zip_file_button.set_sensitive(not self.is_running)
-        self.wordlist_button.set_sensitive(not self.is_running) 
+        self.wordlist_button.set_sensitive(not self.is_running)
+
+    def enable_cracking(self):
+        self.start_button.set_sensitive(False)
+        self.pause_button.set_sensitive(True)
+        self.cancel_button.set_sensitive(True)
+        self.zip_file_button.set_sensitive(False)
+        self.wordlist_button.set_sensitive(False)
+
+    def disable_cracking(self):
+        self.start_button.set_sensitive(True)
+        self.pause_button.set_sensitive(False)
+        self.cancel_button.set_sensitive(False)
+        self.zip_file_button.set_sensitive(True)
+        self.wordlist_button.set_sensitive(True) 
