@@ -52,6 +52,13 @@ class AppWindow(Gtk.ApplicationWindow):
     zip_card = Gtk.Template.Child()
     wordlist_card = Gtk.Template.Child()
     
+    # Widgets do painel de estatísticas
+    stats_panel = Gtk.Template.Child()
+    speed_label = Gtk.Template.Child()
+    eta_label = Gtk.Template.Child()
+    progress_label = Gtk.Template.Child()
+    attempts_label = Gtk.Template.Child()
+    
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         
@@ -68,8 +75,18 @@ class AppWindow(Gtk.ApplicationWindow):
         self.current_password = 0
         self.zip_info = None
         
+        # Estatísticas
+        self.start_time = None
+        self.passwords_per_second = 0
+        self.last_update_time = None
+        self.last_password_count = 0
+        self.total_attempts = 0
+        
         # Definir estilo visual para os cartões
         self.aplicar_estilo_cartoes()
+        
+        # Ocultar painel de estatísticas inicialmente
+        self.stats_panel.set_visible(False)
         
         # Conectar sinais
         self.zip_file_button.connect("clicked", self.on_zip_file_clicked)
@@ -101,6 +118,18 @@ class AppWindow(Gtk.ApplicationWindow):
         .card-selected {
             border: 2px solid @accent_bg_color;
             background-color: alpha(@accent_bg_color, 0.1);
+        }
+        
+        .stat-card {
+            border-radius: 6px;
+            background-color: alpha(#fff, 0.03);
+            transition: all 200ms ease;
+        }
+        
+        .stats-panel {
+            border-top: 1px solid alpha(#fff, 0.1);
+            border-bottom: 1px solid alpha(#fff, 0.1);
+            padding: 8px 0;
         }
         """
         css_provider.load_from_data(css.encode())
@@ -335,6 +364,10 @@ class AppWindow(Gtk.ApplicationWindow):
             self.log("Processo cancelado.")
             
         self.progress_bar.set_fraction(0)
+        
+        # Não ocultar o painel de estatísticas
+        # self.stats_panel.set_visible(False)
+        
         self.update_ui_state()
     
     def start_cracking(self):
@@ -344,6 +377,22 @@ class AppWindow(Gtk.ApplicationWindow):
         self.log("Iniciando processo de quebra de senha...")
         self.log(f"Arquivo: {self.zip_path}")
         self.log(f"Wordlist: {self.wordlist_path}")
+        
+        # Inicializar variáveis de estatísticas
+        self.start_time = time.time()
+        self.last_update_time = self.start_time
+        self.last_password_count = 0
+        self.total_attempts = 0
+        self.passwords_per_second = 0
+        
+        # Mostrar o painel de estatísticas
+        self.stats_panel.set_visible(True)
+        
+        # Resetar as estatísticas
+        self.speed_label.set_text("0 senhas/s")
+        self.eta_label.set_text("--:--:--")
+        self.progress_label.set_text("0/0 (0%)")
+        self.attempts_label.set_text("0")
         
         # Verificar o arquivo ZIP
         self.check_zip_file()
@@ -433,7 +482,75 @@ class AppWindow(Gtk.ApplicationWindow):
             cancel_check=lambda: not self.is_running
         ):
             self.current_password = progress["current_password"]
+            self.total_attempts += 1
             GLib.idle_add(self.update_progress, progress)
+            
+            # Atualizar estatísticas a cada 1 segundo para não sobrecarregar a UI
+            current_time = time.time()
+            if current_time - self.last_update_time >= 0.5:  # Atualiza a cada 0.5 segundos
+                self.update_statistics()
+                self.last_update_time = current_time
+    
+    def update_statistics(self):
+        """Atualiza as estatísticas de desempenho"""
+        if not self.is_running or self.is_paused:
+            return
+        
+        current_time = time.time()
+        elapsed_time = current_time - self.last_update_time
+        passwords_processed = self.current_password - self.last_password_count
+        
+        # Calcular senhas por segundo
+        if elapsed_time > 0:
+            self.passwords_per_second = passwords_processed / elapsed_time
+        
+        # Atualizar a UI com as estatísticas
+        GLib.idle_add(self.update_stats_ui)
+        
+        # Armazenar os valores atuais para o próximo cálculo
+        self.last_password_count = self.current_password
+    
+    def update_stats_ui(self):
+        """Atualiza os widgets de UI com as estatísticas mais recentes"""
+        if not self.is_running:
+            return False
+        
+        # Atualizar velocidade
+        speed_text = f"{self.passwords_per_second:.1f} senhas/s"
+        self.speed_label.set_text(speed_text)
+        
+        # Atualizar tempo restante estimado (ETA)
+        if self.passwords_per_second > 0:
+            remaining_passwords = self.total_passwords - self.current_password
+            seconds_remaining = remaining_passwords / self.passwords_per_second
+            
+            eta = self.format_time_remaining(seconds_remaining)
+            self.eta_label.set_text(eta)
+        else:
+            self.eta_label.set_text("--:--:--")
+        
+        # Atualizar progresso
+        if self.total_passwords > 0:
+            progress_percent = (self.current_password / self.total_passwords) * 100
+            progress_text = f"{self.current_password:,}/{self.total_passwords:,} ({progress_percent:.1f}%)".replace(",", ".")
+            self.progress_label.set_text(progress_text)
+        else:
+            self.progress_label.set_text("0/0 (0%)")
+        
+        # Atualizar tentativas
+        self.attempts_label.set_text(f"{self.total_attempts:,}".replace(",", "."))
+        
+        return False  # Sinaliza que a função terminou e não deve ser chamada novamente
+    
+    def format_time_remaining(self, seconds):
+        """Formata o tempo restante em horas:minutos:segundos"""
+        if seconds < 0:
+            return "--:--:--"
+            
+        hours, remainder = divmod(int(seconds), 3600)
+        minutes, seconds = divmod(remainder, 60)
+        
+        return f"{hours:02}:{minutes:02}:{seconds:02}"
     
     def update_progress(self, progress):
         if not self.is_running:
@@ -471,6 +588,10 @@ class AppWindow(Gtk.ApplicationWindow):
             self.log("=" * 50 + "\n")
             
             self.is_running = False
+            
+            # Não ocultar o painel de estatísticas
+            # self.stats_panel.set_visible(False)
+            
             self.update_ui_state()
         elif error:
             if "Nenhuma senha encontrada" in error:
@@ -483,6 +604,10 @@ class AppWindow(Gtk.ApplicationWindow):
             else:
                 self.log(f"❌ ERRO: {error}")
             self.is_running = False
+            
+            # Não ocultar o painel de estatísticas
+            # self.stats_panel.set_visible(False)
+            
             self.update_ui_state()
         elif warning:
             self.log(f"⚠️ {warning}")
@@ -498,7 +623,7 @@ class AppWindow(Gtk.ApplicationWindow):
         elif info:
             self.log(f"ℹ️ {info}")
         elif current_text:
-            if current % 10 == 0 or current <= 5 or current > self.total_passwords - 5:  # Mostrar mais no início e fim
+            if current % 50 == 0 or current <= 5 or current > self.total_passwords - 5:  # Mostrar mais no início e fim
                 self.log(f"🔍 Testando: {current_text} ({current}/{self.total_passwords})")
         
         return False
