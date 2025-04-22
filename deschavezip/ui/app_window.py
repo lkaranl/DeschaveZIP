@@ -5,10 +5,10 @@ import gi
 gi.require_version('Gtk', '4.0')
 try:
     gi.require_version('Adw', '1')
-    from gi.repository import Gtk, GLib, Gio, GObject, Adw
+    from gi.repository import Gtk, GLib, Gio, GObject, Adw, Gdk
     HAS_ADW = True
 except (ValueError, ImportError):
-    from gi.repository import Gtk, GLib, Gio, GObject
+    from gi.repository import Gtk, GLib, Gio, GObject, Gdk
     HAS_ADW = False
 
 import os
@@ -17,6 +17,7 @@ import time
 import subprocess
 from pathlib import Path
 import traceback
+import datetime
 
 from deschavezip.zip_cracker import ZipCracker
 
@@ -35,6 +36,22 @@ class AppWindow(Gtk.ApplicationWindow):
     log_buffer = Gtk.Template.Child()
     log_view = Gtk.Template.Child()
     
+    # Novos widgets de informação de arquivo ZIP
+    zip_name_label = Gtk.Template.Child()
+    zip_encryption_label = Gtk.Template.Child()
+    zip_size_label = Gtk.Template.Child()
+    zip_files_label = Gtk.Template.Child()
+    
+    # Novos widgets de informação de wordlist
+    wordlist_name_label = Gtk.Template.Child()
+    wordlist_lines_label = Gtk.Template.Child()
+    wordlist_size_label = Gtk.Template.Child()
+    wordlist_time_label = Gtk.Template.Child()
+    
+    # Cards
+    zip_card = Gtk.Template.Child()
+    wordlist_card = Gtk.Template.Child()
+    
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         
@@ -49,6 +66,10 @@ class AppWindow(Gtk.ApplicationWindow):
         self.is_paused = False
         self.total_passwords = 0
         self.current_password = 0
+        self.zip_info = None
+        
+        # Definir estilo visual para os cartões
+        self.aplicar_estilo_cartoes()
         
         # Conectar sinais
         self.zip_file_button.connect("clicked", self.on_zip_file_clicked)
@@ -59,6 +80,38 @@ class AppWindow(Gtk.ApplicationWindow):
         
         # Desativar botões até que os arquivos sejam selecionados
         self.update_ui_state()
+    
+    def aplicar_estilo_cartoes(self):
+        """Aplica estilo visual aos cartões de arquivos"""
+        css_provider = Gtk.CssProvider()
+        css = """
+        .card {
+            border: 1px solid alpha(#000, 0.1);
+            border-radius: 12px;
+            background-color: alpha(#fff, 0.05);
+            box-shadow: 0 2px 4px alpha(#000, 0.1);
+            transition: all 200ms ease;
+        }
+        
+        .card:hover {
+            box-shadow: 0 4px 8px alpha(#000, 0.2);
+            background-color: alpha(#fff, 0.08);
+        }
+        
+        .card-selected {
+            border: 2px solid @accent_bg_color;
+            background-color: alpha(@accent_bg_color, 0.1);
+        }
+        """
+        css_provider.load_from_data(css.encode())
+        
+        # Em GTK4, precisamos obter o display de forma um pouco diferente
+        display = self.get_display()
+        Gtk.StyleContext.add_provider_for_display(
+            display,
+            css_provider,
+            Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+        )
     
     def on_zip_file_clicked(self, button):
         self.select_file("zip")
@@ -88,12 +141,18 @@ class AppWindow(Gtk.ApplicationWindow):
                 if os.path.exists(path):
                     if type_ == "zip":
                         self.zip_path = path
-                        self.zip_file_button.set_label(os.path.basename(path))
+                        self.zip_file_button.set_label("Selecionar outro arquivo")
+                        self.update_zip_info(path)
                         self.log(f"Arquivo ZIP selecionado: {path}")
+                        # Aplicar classe de estilo ao card
+                        self.zip_card.add_css_class("card-selected")
                     else:
                         self.wordlist_path = path
-                        self.wordlist_button.set_label(os.path.basename(path))
+                        self.wordlist_button.set_label("Selecionar outra wordlist")
+                        self.update_wordlist_info(path)
                         self.log(f"Wordlist selecionada: {path}")
+                        # Aplicar classe de estilo ao card
+                        self.wordlist_card.add_css_class("card-selected")
                     self.update_ui_state()
                 else:
                     self.log(f"Erro: Arquivo não encontrado - {path}")
@@ -101,6 +160,93 @@ class AppWindow(Gtk.ApplicationWindow):
             self.log(f"Erro ao abrir seletor de arquivos: {str(e)}")
             # Fallback para o modo texto
             self.ask_file_path(type_)
+    
+    def update_zip_info(self, zip_path):
+        """Atualiza as informações do arquivo ZIP nos widgets do cartão"""
+        if not zip_path or not os.path.exists(zip_path):
+            return
+        
+        # Atualizar nome do arquivo
+        filename = os.path.basename(zip_path)
+        self.zip_name_label.set_text(filename)
+        
+        # Atualizar tamanho do arquivo
+        size_bytes = os.path.getsize(zip_path)
+        if size_bytes < 1024:
+            size_str = f"{size_bytes} bytes"
+        elif size_bytes < 1024 * 1024:
+            size_str = f"{size_bytes/1024:.1f} KB"
+        else:
+            size_str = f"{size_bytes/(1024*1024):.1f} MB"
+        self.zip_size_label.set_text(f"Tamanho: {size_str}")
+        
+        try:
+            # Obter informações adicionais usando o ZipCracker
+            temp_cracker = ZipCracker(zip_path, "")
+            encryption_info = temp_cracker.detect_encryption_type()
+            self.zip_info = encryption_info
+            
+            # Atualizar tipo de criptografia
+            if encryption_info["is_encrypted"]:
+                self.zip_encryption_label.set_text(f"Criptografia: {encryption_info['encryption_type']}")
+            else:
+                self.zip_encryption_label.set_text("Criptografia: Nenhuma")
+            
+            # Atualizar contagem de arquivos
+            if encryption_info["encrypted_files"] > 0:
+                file_text = (f"Arquivos: {encryption_info['encrypted_files']} protegidos "
+                            f"de {encryption_info['total_files']} total")
+            else:
+                file_text = f"Arquivos: {encryption_info['total_files']} (não protegidos)"
+            self.zip_files_label.set_text(file_text)
+        except Exception as e:
+            self.log(f"Erro ao analisar arquivo ZIP: {str(e)}")
+            self.zip_encryption_label.set_text("Criptografia: Desconhecida")
+            self.zip_files_label.set_text("Arquivos: Erro ao analisar")
+    
+    def update_wordlist_info(self, wordlist_path):
+        """Atualiza as informações da wordlist nos widgets do cartão"""
+        if not wordlist_path or not os.path.exists(wordlist_path):
+            return
+        
+        # Atualizar nome do arquivo
+        filename = os.path.basename(wordlist_path)
+        self.wordlist_name_label.set_text(filename)
+        
+        # Atualizar tamanho do arquivo
+        size_bytes = os.path.getsize(wordlist_path)
+        if size_bytes < 1024:
+            size_str = f"{size_bytes} bytes"
+        elif size_bytes < 1024 * 1024:
+            size_str = f"{size_bytes/1024:.1f} KB"
+        else:
+            size_str = f"{size_bytes/(1024*1024):.1f} MB"
+        self.wordlist_size_label.set_text(f"Tamanho: {size_str}")
+        
+        try:
+            # Contar número de senhas
+            with open(wordlist_path, 'r', errors='ignore') as f:
+                num_passwords = sum(1 for line in f if line.strip())
+            
+            self.total_passwords = num_passwords
+            self.wordlist_lines_label.set_text(f"Senhas: {num_passwords:,}".replace(",", "."))
+            
+            # Calcular tempo estimado (assume 500 senhas/segundo em média)
+            if num_passwords > 0:
+                segundos_estimados = num_passwords / 500
+                if segundos_estimados < 60:
+                    tempo_str = f"{segundos_estimados:.1f} segundos"
+                elif segundos_estimados < 3600:
+                    tempo_str = f"{segundos_estimados/60:.1f} minutos"
+                else:
+                    tempo_str = f"{segundos_estimados/3600:.1f} horas"
+                self.wordlist_time_label.set_text(f"Tempo estimado: {tempo_str}")
+            else:
+                self.wordlist_time_label.set_text("Tempo estimado: -")
+        except Exception as e:
+            self.log(f"Erro ao analisar wordlist: {str(e)}")
+            self.wordlist_lines_label.set_text("Senhas: Erro ao contar")
+            self.wordlist_time_label.set_text("Tempo estimado: -")
     
     def ask_file_path(self, type_):
         """Abre uma caixa de diálogo simples para entrada de texto (fallback)"""
@@ -143,12 +289,18 @@ class AppWindow(Gtk.ApplicationWindow):
             if os.path.exists(path):
                 if type_ == 'zip':
                     self.zip_path = path
-                    self.zip_file_button.set_label(os.path.basename(path))
+                    self.zip_file_button.set_label("Selecionar outro arquivo")
+                    self.update_zip_info(path)
                     self.log(f"Arquivo ZIP selecionado: {path}")
+                    # Aplicar classe de estilo ao card
+                    self.zip_card.add_css_class("card-selected")
                 else:
                     self.wordlist_path = path
-                    self.wordlist_button.set_label(os.path.basename(path))
+                    self.wordlist_button.set_label("Selecionar outra wordlist")
+                    self.update_wordlist_info(path)
                     self.log(f"Wordlist selecionada: {path}")
+                    # Aplicar classe de estilo ao card
+                    self.wordlist_card.add_css_class("card-selected")
                 self.update_ui_state()
                 dialog.destroy()
             else:
@@ -370,6 +522,9 @@ class AppWindow(Gtk.ApplicationWindow):
         
         self.zip_file_button.set_sensitive(not self.is_running)
         self.wordlist_button.set_sensitive(not self.is_running)
+        
+        # Atualiza a aparência dos cards conforme o estado dos arquivos
+        self.reset_ui_cards()
 
     def enable_cracking(self):
         self.start_button.set_sensitive(False)
@@ -383,4 +538,20 @@ class AppWindow(Gtk.ApplicationWindow):
         self.pause_button.set_sensitive(False)
         self.cancel_button.set_sensitive(False)
         self.zip_file_button.set_sensitive(True)
-        self.wordlist_button.set_sensitive(True) 
+        self.wordlist_button.set_sensitive(True)
+
+    def reset_ui_cards(self):
+        """Reseta a aparência dos cards quando nenhum arquivo está selecionado"""
+        if not self.zip_path:
+            self.zip_name_label.set_text("Nenhum arquivo selecionado")
+            self.zip_encryption_label.set_text("Tipo de criptografia: -")
+            self.zip_size_label.set_text("Tamanho: -")
+            self.zip_files_label.set_text("Arquivos: -")
+            self.zip_card.remove_css_class("card-selected")
+        
+        if not self.wordlist_path:
+            self.wordlist_name_label.set_text("Nenhum arquivo selecionado")
+            self.wordlist_lines_label.set_text("Senhas: -")
+            self.wordlist_size_label.set_text("Tamanho: -")
+            self.wordlist_time_label.set_text("Tempo estimado: -")
+            self.wordlist_card.remove_css_class("card-selected") 

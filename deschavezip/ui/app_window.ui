@@ -41,42 +41,283 @@
                     </child>
                     <child>
                       <object class="GtkBox">
-                        <property name="orientation">vertical</property>
-                        <property name="spacing">12</property>
+                        <property name="orientation">horizontal</property>
+                        <property name="spacing">16</property>
+                        <property name="homogeneous">true</property>
+                        <property name="margin-top">12</property>
+                        <property name="margin-bottom">12</property>
                         <child>
-                          <object class="GtkBox">
-                            <property name="orientation">horizontal</property>
-                            <property name="spacing">12</property>
+                          <object class="GtkBox" id="zip_card">
+                            <property name="orientation">vertical</property>
+                            <property name="spacing">8</property>
+                            <style>
+                              <class name="card"/>
+                            </style>
+                            <property name="margin-top">8</property>
+                            <property name="margin-bottom">8</property>
+                            <property name="margin-start">8</property>
+                            <property name="margin-end">8</property>
                             <child>
-                              <object class="GtkLabel">
-                                <property name="label" translatable="yes">Arquivo ZIP:</property>
-                                <property name="width-chars">12</property>
-                                <property name="xalign">0</property>
+                              <object class="GtkBox">
+                                <property name="orientation">horizontal</property>
+                                <property name="spacing">12</property>
+                                <property name="margin-top">16</property>
+                                <property name="margin-bottom">8</property>
+                                <property name="margin-start">16</property>
+                                <property name="margin-end">16</property>
+                                <child>
+                                  <object class="GtkLabel">
+                                    <property name="label" translatable="yes">📁</property>
+                                    <property name="halign">start</property>
+                                    <attributes>
+                                      <attribute name="scale" value="2.5"/>
+                                    </attributes>
+                                  </object>
+                                </child>
+                                <child>
+                                  <object class="GtkBox">
+                                    <property name="orientation">vertical</property>
+                                    <property name="spacing">4</property>
+                                    <property name="valign">center</property>
+                                    <child>
+                                      <object class="GtkLabel">
+                                        <property name="label" translatable="yes">Arquivo ZIP</property>
+                                        <property name="halign">start</property>
+                                        <attributes>
+                                          <attribute name="weight" value="bold"/>
+                                          <attribute name="scale" value="1.1"/>
+                                        </attributes>
+                                      </object>
+                                    </child>
+                                    <child>
+                                      <object class="GtkLabel" id="zip_name_label">
+                                        <property name="label" translatable="yes">Nenhum arquivo selecionado</property>
+                                        <property name="halign">start</property>
+                                        <property name="ellipsize">end</property>
+                                      </object>
+                                    </child>
+                                  </object>
+                                </child>
+                              </object>
+                            </child>
+                            <child>
+                              <object class="GtkSeparator">
+                                <property name="margin-start">16</property>
+                                <property name="margin-end">16</property>
+                              </object>
+                            </child>
+                            <child>
+                              <object class="GtkBox">
+                                <property name="orientation">vertical</property>
+                                <property name="spacing">4</property>
+                                <property name="margin-top">8</property>
+                                <property name="margin-bottom">8</property>
+                                <property name="margin-start">16</property>
+                                <property name="margin-end">16</property>
+                                <child>
+                                  <object class="GtkBox">
+                                    <property name="orientation">horizontal</property>
+                                    <property name="spacing">8</property>
+                                    <child>
+                                      <object class="GtkLabel">
+                                        <property name="label" translatable="yes">🔒</property>
+                                      </object>
+                                    </child>
+                                    <child>
+                                      <object class="GtkLabel" id="zip_encryption_label">
+                                        <property name="label" translatable="yes">Tipo de criptografia: -</property>
+                                        <property name="halign">start</property>
+                                        <property name="ellipsize">end</property>
+                                      </object>
+                                    </child>
+                                  </object>
+                                </child>
+                                <child>
+                                  <object class="GtkBox">
+                                    <property name="orientation">horizontal</property>
+                                    <property name="spacing">8</property>
+                                    <child>
+                                      <object class="GtkLabel">
+                                        <property name="label" translatable="yes">📊</property>
+                                      </object>
+                                    </child>
+                                    <child>
+                                      <object class="GtkLabel" id="zip_size_label">
+                                        <property name="label" translatable="yes">Tamanho: -</property>
+                                        <property name="halign">start</property>
+                                        <property name="ellipsize">end</property>
+                                      </object>
+                                    </child>
+                                  </object>
+                                </child>
+                                <child>
+                                  <object class="GtkBox">
+                                    <property name="orientation">horizontal</property>
+                                    <property name="spacing">8</property>
+                                    <child>
+                                      <object class="GtkLabel">
+                                        <property name="label" translatable="yes">📄</property>
+                                      </object>
+                                    </child>
+                                    <child>
+                                      <object class="GtkLabel" id="zip_files_label">
+                                        <property name="label" translatable="yes">Arquivos: -</property>
+                                        <property name="halign">start</property>
+                                        <property name="ellipsize">end</property>
+                                      </object>
+                                    </child>
+                                  </object>
+                                </child>
                               </object>
                             </child>
                             <child>
                               <object class="GtkButton" id="zip_file_button">
                                 <property name="label" translatable="yes">Selecionar arquivo ZIP</property>
-                                <property name="hexpand">true</property>
+                                <property name="margin-top">8</property>
+                                <property name="margin-bottom">16</property>
+                                <property name="margin-start">16</property>
+                                <property name="margin-end">16</property>
+                                <style>
+                                  <class name="suggested-action"/>
+                                </style>
                               </object>
                             </child>
                           </object>
                         </child>
                         <child>
-                          <object class="GtkBox">
-                            <property name="orientation">horizontal</property>
-                            <property name="spacing">12</property>
+                          <object class="GtkBox" id="wordlist_card">
+                            <property name="orientation">vertical</property>
+                            <property name="spacing">8</property>
+                            <style>
+                              <class name="card"/>
+                            </style>
+                            <property name="margin-top">8</property>
+                            <property name="margin-bottom">8</property>
+                            <property name="margin-start">8</property>
+                            <property name="margin-end">8</property>
                             <child>
-                              <object class="GtkLabel">
-                                <property name="label" translatable="yes">Wordlist:</property>
-                                <property name="width-chars">12</property>
-                                <property name="xalign">0</property>
+                              <object class="GtkBox">
+                                <property name="orientation">horizontal</property>
+                                <property name="spacing">12</property>
+                                <property name="margin-top">16</property>
+                                <property name="margin-bottom">8</property>
+                                <property name="margin-start">16</property>
+                                <property name="margin-end">16</property>
+                                <child>
+                                  <object class="GtkLabel">
+                                    <property name="label" translatable="yes">📝</property>
+                                    <property name="halign">start</property>
+                                    <attributes>
+                                      <attribute name="scale" value="2.5"/>
+                                    </attributes>
+                                  </object>
+                                </child>
+                                <child>
+                                  <object class="GtkBox">
+                                    <property name="orientation">vertical</property>
+                                    <property name="spacing">4</property>
+                                    <property name="valign">center</property>
+                                    <child>
+                                      <object class="GtkLabel">
+                                        <property name="label" translatable="yes">Wordlist</property>
+                                        <property name="halign">start</property>
+                                        <attributes>
+                                          <attribute name="weight" value="bold"/>
+                                          <attribute name="scale" value="1.1"/>
+                                        </attributes>
+                                      </object>
+                                    </child>
+                                    <child>
+                                      <object class="GtkLabel" id="wordlist_name_label">
+                                        <property name="label" translatable="yes">Nenhum arquivo selecionado</property>
+                                        <property name="halign">start</property>
+                                        <property name="ellipsize">end</property>
+                                      </object>
+                                    </child>
+                                  </object>
+                                </child>
+                              </object>
+                            </child>
+                            <child>
+                              <object class="GtkSeparator">
+                                <property name="margin-start">16</property>
+                                <property name="margin-end">16</property>
+                              </object>
+                            </child>
+                            <child>
+                              <object class="GtkBox">
+                                <property name="orientation">vertical</property>
+                                <property name="spacing">4</property>
+                                <property name="margin-top">8</property>
+                                <property name="margin-bottom">8</property>
+                                <property name="margin-start">16</property>
+                                <property name="margin-end">16</property>
+                                <child>
+                                  <object class="GtkBox">
+                                    <property name="orientation">horizontal</property>
+                                    <property name="spacing">8</property>
+                                    <child>
+                                      <object class="GtkLabel">
+                                        <property name="label" translatable="yes">🔤</property>
+                                      </object>
+                                    </child>
+                                    <child>
+                                      <object class="GtkLabel" id="wordlist_lines_label">
+                                        <property name="label" translatable="yes">Senhas: -</property>
+                                        <property name="halign">start</property>
+                                        <property name="ellipsize">end</property>
+                                      </object>
+                                    </child>
+                                  </object>
+                                </child>
+                                <child>
+                                  <object class="GtkBox">
+                                    <property name="orientation">horizontal</property>
+                                    <property name="spacing">8</property>
+                                    <child>
+                                      <object class="GtkLabel">
+                                        <property name="label" translatable="yes">📊</property>
+                                      </object>
+                                    </child>
+                                    <child>
+                                      <object class="GtkLabel" id="wordlist_size_label">
+                                        <property name="label" translatable="yes">Tamanho: -</property>
+                                        <property name="halign">start</property>
+                                        <property name="ellipsize">end</property>
+                                      </object>
+                                    </child>
+                                  </object>
+                                </child>
+                                <child>
+                                  <object class="GtkBox">
+                                    <property name="orientation">horizontal</property>
+                                    <property name="spacing">8</property>
+                                    <child>
+                                      <object class="GtkLabel">
+                                        <property name="label" translatable="yes">⏱️</property>
+                                      </object>
+                                    </child>
+                                    <child>
+                                      <object class="GtkLabel" id="wordlist_time_label">
+                                        <property name="label" translatable="yes">Tempo estimado: -</property>
+                                        <property name="halign">start</property>
+                                        <property name="ellipsize">end</property>
+                                      </object>
+                                    </child>
+                                  </object>
+                                </child>
                               </object>
                             </child>
                             <child>
                               <object class="GtkButton" id="wordlist_button">
                                 <property name="label" translatable="yes">Selecionar wordlist</property>
-                                <property name="hexpand">true</property>
+                                <property name="margin-top">8</property>
+                                <property name="margin-bottom">16</property>
+                                <property name="margin-start">16</property>
+                                <property name="margin-end">16</property>
+                                <style>
+                                  <class name="suggested-action"/>
+                                </style>
                               </object>
                             </child>
                           </object>
@@ -88,7 +329,7 @@
                         <property name="orientation">horizontal</property>
                         <property name="spacing">12</property>
                         <property name="halign">center</property>
-                        <property name="margin-top">24</property>
+                        <property name="margin-top">12</property>
                         <child>
                           <object class="GtkButton" id="start_button">
                             <property name="label" translatable="yes">Iniciar</property>
