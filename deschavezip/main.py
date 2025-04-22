@@ -34,18 +34,22 @@ class DeschaveZIPApp(Gtk.Application):
         win.present()
 
 def main():
-    # Configurar o tema escuro se disponível
-    settings = Gtk.Settings.get_default()
-    if settings is not None:
-        settings.set_property("gtk-application-prefer-dark-theme", True)
-    
     if HAS_ADW:
         # Use o estilo Adwaita se disponível
         app = Adw.Application(application_id="com.github.deschavezip",
                               flags=Gio.ApplicationFlags.FLAGS_NONE)
         app.connect("activate", on_activate_adw)
+        
+        # Configurar o tema escuro usando AdwStyleManager (método recomendado para libadwaita)
+        style_manager = Adw.StyleManager.get_default()
+        style_manager.set_color_scheme(Adw.ColorScheme.PREFER_DARK)
     else:
         app = DeschaveZIPApp()
+        
+        # Neste caso, podemos usar o método antigo para GTK sem libadwaita
+        settings = Gtk.Settings.get_default()
+        if settings is not None:
+            settings.set_property("gtk-application-prefer-dark-theme", True)
     
     return app.run(None)
 
