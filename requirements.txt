@@ -1,6 +1,25 @@
 PyGObject>=3.40.0
 
-# Dependências do sistema que devem ser instaladas via gerenciador de pacotes (apt, dnf, etc):
-# - GTK 4.0 (gir1.2-gtk-4.0)
-# - Zenity (zenity)
-# - Libadwaita (gir1.2-adw-1) [opcional] 
+# Dependências do sistema que devem ser instaladas via gerenciador de pacotes:
+#
+# Dependências obrigatórias:
+# - GTK 4.0
+#   • Debian/Ubuntu: gir1.2-gtk-4.0
+#   • Fedora/RHEL: gtk4
+#   • Arch Linux: gtk4
+#
+# - Zenity
+#   • Debian/Ubuntu: zenity
+#   • Fedora/RHEL: zenity
+#   • Arch Linux: zenity
+#
+# Dependências opcionais:
+# - Libadwaita (para interface moderna)
+#   • Debian/Ubuntu: gir1.2-adw-1
+#   • Fedora/RHEL: libadwaita
+#   • Arch Linux: libadwaita
+#
+# - 7-Zip (necessário para quebrar senhas de arquivos ZIP com criptografia AES)
+#   • Debian/Ubuntu: p7zip-full
+#   • Fedora/RHEL: p7zip p7zip-plugins
+#   • Arch Linux: p7zip 

@@ -4,6 +4,13 @@
 import gi
 import sys
 
+from deschavezip.dependency_checker import check_dependencies, show_dependency_error
+
+# Verifica dependências antes de tentar importar GTK
+if not check_dependencies():
+    show_dependency_error()
+    sys.exit(1)
+
 gi.require_version('Gtk', '4.0')
 try:
     gi.require_version('Adw', '1')
