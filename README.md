@@ -1,6 +1,6 @@
 # DeschaveZIP
 
-Uma ferramenta para quebra de senhas de arquivos ZIP com interface GNOME moderna. Utiliza ataque de dicionário e processamento paralelo para testar senhas em arquivos ZIP protegidos.
+Uma ferramenta para quebra de senhas de arquivos ZIP com interface GNOME. Utiliza ataque de dicionário e processamento paralelo para testar senhas em arquivos ZIP protegidos.
 
 ## Funcionalidades
 
