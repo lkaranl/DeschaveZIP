@@ -278,7 +278,7 @@ Após a instalação, você pode executar o aplicativo de duas formas:
 1. Diretamente do diretório do projeto:
 
 ```bash
-python3 run.py
+python3 main.py
 ```
 
 2. Usando o comando instalado (se você instalou com pip):

@@ -26,14 +26,14 @@ DeschaveZIP/
 ├── setup.py
 ├── requirements.txt
 ├── README.md
-└── run.py
+└── main.py
 ```
 
 ## Descrição dos Arquivos
 
 ### Arquivos Principais
 
-- `run.py`: Ponto de entrada da aplicação. Responsável por inicializar o GTK e criar a janela principal.
+- `main.py`: Ponto de entrada da aplicação. Responsável por inicializar o GTK e criar a janela principal.
 - `setup.py`: Configuração do pacote Python, definindo dependências e metadados do projeto.
 - `requirements.txt`: Lista de dependências Python necessárias para o projeto.
 
@@ -62,8 +62,8 @@ Contém os testes unitários e de integração:
 
 ## Fluxo de Execução
 
-1. O usuário executa `run.py`
-2. `run.py` inicializa o GTK e cria a janela principal
+1. O usuário executa `main.py`
+2. `main.py` inicializa o GTK e cria a janela principal
 3. O usuário seleciona um arquivo ZIP e uma wordlist
 4. `zip_cracker.py` analisa o arquivo e determina o tipo de criptografia
 5. A quebra de senha é iniciada usando threads paralelas
